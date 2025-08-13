@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Before / After Mix Demos — Standalone</title>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&family=PT+Serif&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#36302A; --card:#574C3F; --edge:#4A4035; --fg:#F6F3EC; --muted:#ECE4DA; --accent:#B9A590; --accent-ink:#1a1612;
+    --font-head:'Marcellus',serif; --font-body:'PT Serif',serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 var(--font-body)}
+  .wrap{width:100%; max-width:980px; margin:24px auto; background:var(--card); border:1px solid var(--edge); border-radius:20px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px}
+  h1{font:700 22px/1.2 var(--font-head); margin:0}
+  .badge{font-size:12px; color:var(--accent-ink); background:var(--accent); padding:4px 8px; border-radius:999px}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  button{ background:#3C342C; color:var(--fg); border:1px solid var(--edge); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:650; letter-spacing:.2px; font-family:var(--font-body) }
+  .primary{background:var(--fg); color:var(--accent-ink); border-color:transparent}
+  .slider{width:100%; height:10px; background:#3A322A; border:1px solid var(--edge); border-radius:999px; position:relative}
+  .slider input[type=range]{-webkit-appearance:none; width:100%; height:10px; background:transparent; position:relative; z-index:2; margin:0}
+  .slider .fill{position:absolute; inset:0; background:linear-gradient(90deg, var(--accent), #8f7a66); border-radius:999px; transform-origin:left; transform:scaleX(0)}
+  .label{font-size:12px; color:var(--muted)}
+  .time{font-variant-numeric:tabular-nums; font-size:12px; color:var(--muted)}
+  .kbd{font:12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background:#3A322A; border:1px solid var(--edge); padding:2px 6px; border-radius:6px}
+  .hint{font-size:12px; color:var(--muted); text-align:center; margin-top:6px}
+  .waveWrap{position:relative; background:#3A322A; border:1px solid var(--edge); border-radius:12px; padding:8px; margin-top:10px}
+  canvas#wave{width:100%; height:74px; display:block}
+  .legend{display:flex; gap:12px; align-items:center; font-size:12px; color:var(--muted); margin-top:4px}
+  .dot{width:10px; height:10px; border-radius:50%}
+  .dot.before{background:#7aa0ff55; border:1px solid #7aa0ff}
+  .dot.after{background:#8cffd855; border:1px solid #8cffd8}
+  .tracks{display:flex; gap:8px; overflow:auto; padding:6px; border:1px solid var(--edge); border-radius:12px; background:#3A322A}
+  .trackbtn{padding:8px 12px; border-radius:10px; border:1px solid var(--edge); background:#3C342C; white-space:nowrap}
+  .trackbtn.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+  /* Uploader */
+  .uploader{margin:14px 0; border:1px dashed var(--edge); border-radius:12px; padding:12px; background:#3A322A}
+  .uploader input[type=text]{width:220px; max-width:100%; padding:8px 10px; border-radius:10px; border:1px solid var(--edge); background:#2f2923; color:var(--fg)}
+  .uploader .file{display:inline-block; padding:8px 10px; border:1px solid var(--edge); border-radius:10px; background:#2f2923}
+</style>
+</head>
+<body>
+<div class="wrap" role="region" aria-label="Before After Mix Demo">
+  <header>
+    <h1>Before / After <span style="opacity:.6">(Standalone)</span></h1>
+    <span class="badge" id="state">Idle</span>
+  </header>
+
+  <!-- Track selector -->
+  <div class="tracks" id="tracks" aria-label="Song list"></div>
+
+  <!-- Add track (works anywhere, no hosting required) -->
+  <div class="uploader" aria-label="Add a new song">
+    <div class="row">
+      <span class="label">Title</span>
+      <input id="upTitle" type="text" placeholder="Song title"/>
+      <span class="label">Before</span>
+      <label class="file"><input id="upBefore" type="file" accept="audio/*"></label>
+      <span class="label">After</span>
+      <label class="file"><input id="upAfter" type="file" accept="audio/*"></label>
+      <button id="addTrack">Add Track</button>
+    </div>
+    <div class="label" style="margin-top:6px">Tip: you can also predefine tracks in the code below using filenames or URLs (see comments in script).</div>
+  </div>
+
+  <!-- Audio elements -->
+  <audio id="aBefore" preload="metadata" crossorigin="anonymous"></audio>
+  <audio id="aAfter" preload="metadata" crossorigin="anonymous"></audio>
+
+  <div class="waveWrap">
+    <canvas id="wave" aria-label="Waveform visualization"></canvas>
+    <div class="legend">
+      <div class="dot before"></div><span class="label">Before</span>
+      <div class="dot after"></div><span class="label">After</span>
+      <div style="flex:1"></div>
+      <span class="label">Playhead: <span id="ph">0:00</span></span>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <button id="play" class="primary">▶︎ Play</button>
+    <button id="toggleAB">Before</button>
+    <div style="flex:1"></div>
+    <div class="label">Keys: <span class="kbd">T</span> toggle • <span class="kbd">P</span> play/pause</div>
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <div style="display:grid; gap:6px; flex:1">
+      <div class="row" style="gap:10px">
+        <div class="time" id="cur">0:00</div>
+        <div class="slider" id="seek" style="flex:1">
+          <div class="fill" id="seekFill"></div>
+          <input type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+        </div>
+        <div class="time" id="dur">0:00</div>
+      </div>
+      <div class="row" style="gap:10px">
+        <span class="label" style="width:72px">Crossfade</span>
+        <div class="slider" id="xf" style="flex:1">
+          <div class="fill" id="xfFill"></div>
+          <input type="range" min="0" max="100" value="0" step="1" aria-label="Crossfade A↔︎B" />
+        </div>
+        <span class="label" id="xfLbl">A</span>
+      </div>
+      <div class="row" style="gap:10px">
+        <span class="label" style="width:72px">Volume</span>
+        <div class="slider" id="vol" style="flex:1">
+          <div class="fill" id="volFill"></div>
+          <input type="range" min="0" max="100" value="40" step="1" aria-label="Volume" />
+        </div>
+        <span class="label" id="volLbl">40%</span>
+      </div>
+      <div class="row" style="gap:18px">
+        <label class="label"><input type="checkbox" id="match" checked /> Level‑match (‑1.0 dB)</label>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint">Use the uploader above to add songs from your computer (no hosting needed), or predefine tracks with file paths/URLs in the script. Waveform drawing needs CORS only when fetching from *another* domain.</p>
+</div>
+
+<script>
+(function(){
+  // ===========================
+  //  A) PREDEFINED TRACKS (optional)
+  //     Works anywhere: use relative files in the same folder OR full HTTPS URLs.
+  //     Example (uncomment and edit):
+  // const predefined = [
+  //   { title:'Million Dollar Baby', before:'MDBA.mp3', after:'MDBB.mp3' },
+  //   { title:'Tony Soprano', before:'TSA.mp3', after:'TSB.mp3' },
+  // ];
+  // Predefined demo tracks. These will load automatically when the page opens.
+  // The audio files live in the `audio` folder alongside this HTML file.
+  const predefined = [
+    { title:'Million Dollar Baby', before:'audio/MDBA.mp3', after:'audio/MDBB.mp3' },
+    { title:'Tony Soprano',       before:'audio/TSA.mp3',  after:'audio/TSB.mp3'  },
+    { title:'Loyal',              before:'audio/LA.mp3',   after:'audio/LB.mp3'   },
+    { title:'Chrysanthemum',      before:'audio/CMA.mp3',  after:'audio/CMB.mp3'  },
+    { title:'Denim',              before:'audio/DA.mp3',   after:'audio/DB.mp3'   },
+    { title:'Famous',             before:'audio/FA.mp3',   after:'audio/FB.mp3'   },
+  ];
+
+  //  B) ADD TRACKS AT RUNTIME (file inputs)
+  //     This uses object URLs so it works locally without CORS or hosting.
+  // ============================
+
+  // DOM refs
+  const aA = document.getElementById('aBefore');
+  const aB = document.getElementById('aAfter');
+  const btnPlay = document.getElementById('play');
+  const toggleAB = document.getElementById('toggleAB');
+  const lblState = document.getElementById('state');
+  const seek = document.querySelector('#seek input');
+  const seekFill = document.getElementById('seekFill');
+  const cur = document.getElementById('cur');
+  const dur = document.getElementById('dur');
+  const xf = document.querySelector('#xf input');
+  const xfFill = document.getElementById('xfFill');
+  const xfLbl = document.getElementById('xfLbl');
+  const vol = document.querySelector('#vol input');
+  const volFill = document.getElementById('volFill');
+  const volLbl = document.getElementById('volLbl');
+  const match = document.getElementById('match');
+  const ph = document.getElementById('ph');
+  const tracksUI = document.getElementById('tracks');
+
+  // Uploader refs
+  const upTitle = document.getElementById('upTitle');
+  const upBefore = document.getElementById('upBefore');
+  const upAfter = document.getElementById('upAfter');
+  const addTrackBtn = document.getElementById('addTrack');
+
+  // Canvas for wave
+  const waveCanvas = document.getElementById('wave');
+  const ctx = waveCanvas.getContext('2d');
+  const dpr = Math.max(1, window.devicePixelRatio||1);
+  function resizeCanvas(){
+    const rect = waveCanvas.getBoundingClientRect();
+    waveCanvas.width = Math.floor(rect.width * dpr);
+    waveCanvas.height = Math.floor(rect.height * dpr);
+  }
+  resizeCanvas(); addEventListener('resize', resizeCanvas);
+
+  // State
+  let active = 'A';
+  let currentTrack = 0;
+  let raf = null;
+  let tracks = [];
+  let bufA = null, bufB = null, peaksA=null, peaksB=null;
+
+  // Utils
+  const fmt = s => { s = Math.floor(s||0); const m=Math.floor(s/60), r=s%60; return m+":"+(r<10?"0":"")+r };
+  const setState = s => lblState.textContent = s;
+  const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+  const dbToGain = db => Math.pow(10, db/20);
+
+  function sync(to){
+    const t = to.currentTime;
+    if (Math.abs(aA.currentTime - t) > 0.08) aA.currentTime = t;
+    if (Math.abs(aB.currentTime - t) > 0.08) aB.currentTime = t;
+  }
+
+  function applyGains(){
+    const v = vol.value/100;
+    const xfV = xf.value/100;
+    const att = match.checked ? dbToGain(-1.0) : 1;
+    const a = Math.cos(xfV * Math.PI/2);
+    const b = Math.cos((1-xfV) * Math.PI/2);
+    aA.volume = clamp(v * a * att, 0, 1);
+    aB.volume = clamp(v * b * att, 0, 1);
+  }
+
+  function updateUI(){
+    const t = Math.max(aA.currentTime, aB.currentTime);
+    const d = Math.max(aA.duration||0, aB.duration||0);
+    seek.value = d? Math.round((t/d)*1000) : 0;
+    seekFill.style.transform = `scaleX(${seek.value/1000})`;
+    cur.textContent = fmt(t); ph.textContent = fmt(t);
+    dur.textContent = isFinite(d) && d>0 ? fmt(d) : '0:00';
+    xfFill.style.transform = `scaleX(${xf.value/100})`;
+    volFill.style.transform = `scaleX(${vol.value/100})`;
+    xfLbl.textContent = xf.value<50? 'A' : (xf.value>50? 'B' : 'A+B');
+    volLbl.textContent = vol.value + '%';
+    drawWave(t, d);
+    raf = requestAnimationFrame(updateUI);
+  }
+
+  function playPause(){
+    if (aA.paused && aB.paused){
+      const start = Math.max(aA.currentTime||0, aB.currentTime||0);
+      aA.currentTime = start; aB.currentTime = start;
+      Promise.allSettled([aA.play(), aB.play()]);
+      btnPlay.textContent = '⏸︎ Pause';
+      setState(active==='A' ? 'A: Before' : 'B: After');
+      raf = requestAnimationFrame(updateUI);
+    } else {
+      aA.pause(); aB.pause();
+      btnPlay.textContent = '▶︎ Play';
+      setState('Paused');
+      cancelAnimationFrame(raf); raf = null;
+      drawWave(Math.max(aA.currentTime,aB.currentTime), Math.max(aA.duration||0,aB.duration||0));
+    }
+  }
+
+  function toggle(){
+    active = active==='A' ? 'B' : 'A';
+    xf.value = active==='A' ? 0 : 100;
+    applyGains();
+    toggleAB.textContent = active==='A' ? 'Before' : 'After';
+    setState(active==='A' ? 'A: Before' : 'B: After');
+  }
+
+  function renderTrackButtons(){
+    tracksUI.innerHTML = '';
+    tracks.forEach((t, i)=>{
+      const b = document.createElement('button');
+      b.className = 'trackbtn' + (i===currentTrack?' on':'');
+      b.textContent = t.title || `Track ${i+1}`;
+      b.addEventListener('click', ()=> loadTrack(i));
+      tracksUI.appendChild(b);
+    });
+  }
+
+  function setSources(t){
+    aA.src = t.before; // object URL or path/URL
+    aB.src = t.after;
+    aA.load(); aB.load();
+  }
+
+  async function loadTrack(i){
+    aA.pause(); aB.pause(); btnPlay.textContent = '▶︎ Play';
+    active = 'A'; xf.value = 0; toggleAB.textContent = 'Before'; setState('A: Before');
+    currentTrack = i; renderTrackButtons();
+    setSources(tracks[currentTrack]);
+    bufA=bufB=peaksA=peaksB=null;
+    setTimeout(()=>{ loadWaveforms(); }, 0);
+  }
+
+  function downsamplePeaks(buffer, targetWidth){
+    const data = buffer.getChannelData(0);
+    const block = Math.floor(data.length / targetWidth) || 1;
+    const peaks = new Float32Array(targetWidth*2);
+    for (let i=0;i<targetWidth;i++){
+      let start = i*block, end = Math.min(start+block, data.length);
+      let min=1, max=-1;
+      for (let j=start;j<end;j++){ const v=data[j]; if (v<min) min=v; if (v>max) max=v; }
+      peaks[i*2] = min; peaks[i*2+1] = max;
+    }
+    return peaks;
+  }
+
+  async function fetchAsArrayBuffer(url){
+    // Works with same-origin files/URLs and object URLs.
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Fetch failed: '+res.status);
+    return await res.arrayBuffer();
+  }
+
+  async function loadWaveforms(){
+    try {
+      const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const ctxOff = new AC(1, 44100*10, 44100);
+      const [bufAData, bufBData] = await Promise.all([
+        fetchAsArrayBuffer(aA.currentSrc || aA.src),
+        fetchAsArrayBuffer(aB.currentSrc || aB.src)
+      ]);
+      bufA = await ctxOff.decodeAudioData(bufAData);
+      bufB = await ctxOff.decodeAudioData(bufBData);
+      peaksA = downsamplePeaks(bufA, waveCanvas.width);
+      peaksB = downsamplePeaks(bufB, waveCanvas.width);
+    } catch(e){ console.warn('Waveform draw skipped:', e.message); }
+  }
+
+  // Add track via uploader
+  addTrackBtn.addEventListener('click', ()=>{
+    const title = (upTitle.value||'Untitled').trim();
+    const fA = upBefore.files[0];
+    const fB = upAfter.files[0];
+    if (!fA || !fB){ alert('Please choose both Before and After files.'); return; }
+    const urlA = URL.createObjectURL(fA);
+    const urlB = URL.createObjectURL(fB);
+    tracks.push({ title, before:urlA, after:urlB, _revoke:[urlA,urlB] });
+    upTitle.value=''; upBefore.value=''; upAfter.value='';
+    if (tracks.length===1){ currentTrack=0; }
+    renderTrackButtons();
+    loadTrack(tracks.length-1);
+  });
+
+  // Keyboard + controls
+  toggleAB.addEventListener('click', toggle);
+  document.addEventListener('keydown', e=>{ if(e.key.toLowerCase()==='t') toggle(); if(e.key.toLowerCase()==='p') playPause(); });
+  btnPlay.addEventListener('click', playPause);
+  seek.addEventListener('input', ()=>{
+    const d = Math.max(aA.duration||0, aB.duration||0);
+    const t = (seek.value/1000)*d; aA.currentTime = t; aB.currentTime = t;
+  });
+  [aA, aB].forEach(a=>{
+    a.addEventListener('timeupdate', ()=>{ sync(a); });
+    a.addEventListener('loadedmetadata', ()=>{ dur.textContent = fmt(Math.max(aA.duration||0, aB.duration||0)); });
+  });
+  xf.addEventListener('input', applyGains);
+  vol.addEventListener('input', applyGains);
+  match.addEventListener('change', applyGains);
+
+  // Init
+  tracks = predefined.slice();
+  renderTrackButtons();
+  if (tracks.length){ loadTrack(0); }
+  applyGains();
+  updateUI();
+})();
+</script>
+</body>
+</html>
